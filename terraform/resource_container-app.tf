@@ -4,6 +4,12 @@ resource "azurecaf_name" "app_name" {
   clean_input   = true
 }
 
+resource "azurerm_user_assigned_identity" "albumapi" {
+  location            = data.azurerm_resource_group.applications.location
+  name                = "id-albumapi"
+  resource_group_name = data.azurerm_resource_group.applications.name
+}
+
 resource "azurerm_container_app" "application" {
   name                         = azurecaf_name.app_name.result
   container_app_environment_id = data.azurerm_container_app_environment.applications.id
@@ -34,21 +40,47 @@ resource "azurerm_container_app" "application" {
     }
   }
 
+  identity {
+    type         = "SystemAssigned, UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.albumapi.id]
+  }
+
+  registry {
+    server   = data.azurerm_container_registry.acr.login_server
+    identity = azurerm_user_assigned_identity.albumapi.id
+  }
+
+  secret {
+    name  = "acr-master-key"
+    value = data.azurerm_container_registry.acr.admin_password
+  }
+
   lifecycle {
     ignore_changes = [
       tags
     ]
   }
 
-  identity {
-    type = "SystemAssigned"
-  }
+  depends_on = [
+    azurecaf_name.app_name, azurerm_user_assigned_identity.albumapi
+  ]
+
 }
 
-resource "azurerm_role_assignment" "container_registry_acrpull" {
+# resource "azurerm_role_assignment" "container_registry_acrpull_system_assigned" {
+#   role_definition_name = "AcrPull"
+#   scope                = data.azurerm_container_registry.acr.id
+#   principal_id         = azurerm_container_app.application.identity[0].principal_id
+
+#   depends_on = [
+#     azurerm_container_app.application
+#   ]
+# }
+
+resource "azurerm_role_assignment" "container_registry_acrpull_user_assigned" {
   role_definition_name = "AcrPull"
   scope                = data.azurerm_container_registry.acr.id
-  principal_id         = azurerm_container_app.application.identity[0].principal_id
+  principal_id         = azurerm_user_assigned_identity.albumapi.principal_id
 
   depends_on = [
     azurerm_container_app.application

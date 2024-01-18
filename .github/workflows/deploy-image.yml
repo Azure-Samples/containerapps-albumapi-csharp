@@ -1,5 +1,4 @@
-name: Azure Container Apps Build and Deploy
-
+name: Azure Container Apps Deploy existing image
 
 on:
   push:
@@ -14,7 +13,6 @@ on:
         type: environment
         required: true
 
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,12 +25,10 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-
       - name: Build and deploy Container App
         uses: azure/container-apps-deploy-action@v1
         with:
-          appSourcePath: ${{ github.workspace }}/src
           acrName: crthunebyinfrastructure
           containerAppName: ca-albumapi
           resourceGroup: rg-container-apps
-          imageToBuild: crthunebyinfrastructure.azurecr.io/albumapi:latest
+          imageToDeploy: crthunebyinfrastructure.azurecr.io/albumapi:latest
