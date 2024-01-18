@@ -1,0 +1,139 @@
+name: 'Apply Platform Infrastructure'
+
+on:
+  # push:
+  #   paths:
+  #     - 'terraform/*.tf'
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Bootstrap environment
+        type: environment
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+jobs:
+  terraform-validate:
+    name: 'Terraform Validate'
+    runs-on: 'ubuntu-latest'
+
+    defaults:
+      run:
+        working-directory: ./terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      - name: Terraform Init
+        run:  terraform init -backend=false
+
+      - name: Terraform Format
+        run: terraform fmt -check --recursive
+
+      - name: Terraform Validate
+        run: terraform validate
+
+
+  terraform-plan:
+    name: 'Terraform-Plan'
+    runs-on: ubuntu-latest
+
+
+    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: ./terraform
+
+    steps:
+    # Checkout the repository to the GitHub Actions runner
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    # Install the latest version of Terraform CLI and configure the Terraform CLI configuration file with a Terraform Cloud user API token
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    - name: Terraform Init
+      run: |
+        terraform init
+
+    # Generates an execution plan for Terraform
+    - name: Terraform Plan
+      run: |
+        terraform plan -input=false -out=terraform.plan
+
+    - name: Upload Terraform Plan
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-plan
+        path: | 
+          ./terraform/terraform.plan
+          ./terraform/.terraform.lock.hcl
+        if-no-files-found: error 
+
+  approve:
+    needs: [terraform-plan,terraform-validate]
+    environment: manual-gate
+    runs-on: ubuntu-latest
+    steps:
+    - name: Approval
+      run: echo Approved
+
+  terraform-apply:
+    name: 'Terraform-Apply'
+    needs: [approve]
+    runs-on: ubuntu-latest
+
+    # Use the Bash shell regardless whether the GitHub Actions runner is ubuntu-latest, macos-latest, or windows-latest
+    defaults:
+      run:
+        working-directory: ./terraform
+
+    steps:
+    # Checkout the repository to the GitHub Actions runner
+    - uses: actions/checkout@v4
+
+    - name: Get prepared plan
+      uses: actions/download-artifact@v4
+      with:
+        name: terraform-plan
+        path: ./terraform
+    
+    # Install the latest version of Terraform CLI and configure the Terraform CLI configuration file with a Terraform Cloud user API token
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+    # Initialize a new or existing Terraform working directory by creating initial files, loading any remote state, downloading modules, etc.
+    - name: Terraform Init
+      run:  terraform init
+
+    # # Checks that all Terraform configuration files adhere to a canonical format
+    # - name: Terraform Format
+    #   run: |
+    #     cd terraform
+    #     terraform fmt -check
+
+    # Generates an execution plan for Terraform
+    - name: Terraform Apply
+      run:  terraform apply -auto-approve -input=false terraform.plan

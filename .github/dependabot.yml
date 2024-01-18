@@ -1,0 +1,15 @@
+version: 2
+updates:
+- package-ecosystem: nuget
+  directory: "/"
+  schedule:
+    interval: daily
+  open-pull-requests-limit: 25
+- package-ecosystem: "terraform"
+  directory: "/tf_infrastructure"
+  schedule:
+    interval: "daily"
+- package-ecosystem: "github-actions"
+  directory: "/.github/workflows"
+  schedule:
+    interval: "daily"
