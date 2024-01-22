@@ -24,7 +24,7 @@ resource "azurerm_container_app" "application" {
       cpu    = 0.25
       memory = "0.5Gi"
       liveness_probe {
-        port      = 80
+        port      = 8080
         transport = "HTTP"
       }
     }
@@ -32,7 +32,7 @@ resource "azurerm_container_app" "application" {
 
   ingress {
     external_enabled = true
-    target_port      = 80
+    target_port      = 8080
     transport        = "auto"
     traffic_weight {
       percentage      = 100
